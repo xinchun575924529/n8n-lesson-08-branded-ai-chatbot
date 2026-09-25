@@ -1,0 +1,49 @@
+{
+  "id": "L2Test278600001",
+  "name": "L2A-UnitTest-2786-BrandedChatbot",
+  "meta": {
+    "templateId": "2786"
+  },
+  "nodes": [
+    {
+      "id": "trig-1",
+      "name": "Run Tests",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "code-1",
+      "name": "Unit Tests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "jsCode": "\nfunction freeTimeSlotsFaithful(inputValueArray) {\n  const items = [{ json: { value: inputValueArray } }];\n  // ===== 模板 2786 freeTimeSlots 节点原文开始 =====\n  const businessHoursStart = \"08:00:00Z\";  // Business hours start time\n  const businessHoursEnd = \"17:30:00Z\";    // Business hours end time\n\n  const inputData = items[0].json.value;\n\n  function getDateWithTime(dateString, time) {\n    const datePart = new Date(dateString).toISOString().split(\"T\")[0];\n    return new Date(`${datePart}T${time}`);\n  }\n  function getDayOfWeek(dateString) {\n    const daysOfWeek = [\"Sunday\", \"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\"];\n    return daysOfWeek[new Date(dateString).getUTCDay()];\n  }\n  function addDays(date, days) {\n    const result = new Date(date);\n    result.setDate(result.getDate() + days);\n    return result;\n  }\n  function formatDate(date) {\n    return date.toISOString().split('T')[0];\n  }\n  const defaultTimeZone = inputData.length > 0 && inputData[0].start && inputData[0].start.timeZone\n    ? inputData[0].start.timeZone\n    : \"UTC\";\n\n  let minDate = null;\n  let maxDate = null;\n  inputData.forEach(event => {\n    if (event.start && event.start.dateTime) {\n      const eventDate = new Date(event.start.dateTime);\n      if (!minDate || eventDate < minDate) { minDate = eventDate; }\n      if (!maxDate || eventDate > maxDate) { maxDate = eventDate; }\n    }\n  });\n  if (minDate && maxDate) {\n    minDate = new Date(minDate.toISOString().split('T')[0]);\n    maxDate = new Date(maxDate.toISOString().split('T')[0]);\n  }\n\n  const eventsByDate = {};\n  inputData.forEach(event => {\n    if (event.start && event.start.dateTime) {\n      const eventDate = new Date(event.start.dateTime).toISOString().split(\"T\")[0];\n      if (!eventsByDate[eventDate]) { eventsByDate[eventDate] = []; }\n      if (event.showAs === \"busy\") {\n        eventsByDate[eventDate].push({\n          start: new Date(event.start.dateTime),\n          end: new Date(event.end.dateTime),\n          timeZone: event.start.timeZone || defaultTimeZone\n        });\n      }\n    }\n  });\n\n  const freeTimeSlots = [];\n  if (minDate && maxDate) {\n    for (let currentDate = new Date(minDate); currentDate <= maxDate; currentDate = addDays(currentDate, 1)) {\n      const dateStr = formatDate(currentDate);\n      const busyEvents = eventsByDate[dateStr] || [];\n      const businessStart = getDateWithTime(dateStr, businessHoursStart);\n      const businessEnd = getDateWithTime(dateStr, businessHoursEnd);\n      if (busyEvents.length === 0) {\n        freeTimeSlots.push({ date: dateStr, dayOfWeek: getDayOfWeek(dateStr), freeStart: businessStart.toISOString(), freeEnd: businessEnd.toISOString(), timeZone: defaultTimeZone });\n        continue;\n      }\n      busyEvents.sort((a, b) => a.start - b.start);\n      if (busyEvents[0].start > businessStart) {\n        freeTimeSlots.push({ date: dateStr, dayOfWeek: getDayOfWeek(dateStr), freeStart: businessStart.toISOString(), freeEnd: busyEvents[0].start.toISOString(), timeZone: busyEvents[0].timeZone });\n      }\n      for (let i = 0; i < busyEvents.length - 1; i++) {\n        if (busyEvents[i].end < busyEvents[i+1].start) {\n          freeTimeSlots.push({ date: dateStr, dayOfWeek: getDayOfWeek(dateStr), freeStart: busyEvents[i].end.toISOString(), freeEnd: busyEvents[i+1].start.toISOString(), timeZone: busyEvents[i].timeZone });\n        }\n      }\n      if (busyEvents[busyEvents.length - 1].end < businessEnd) {\n        freeTimeSlots.push({ date: dateStr, dayOfWeek: getDayOfWeek(dateStr), freeStart: busyEvents[busyEvents.length - 1].end.toISOString(), freeEnd: businessEnd.toISOString(), timeZone: busyEvents[busyEvents.length - 1].timeZone });\n      }\n    }\n  }\n  return [{ json: { freeTimeSlots } }];\n  // ===== 模板 2786 freeTimeSlots 节点原文结束 =====\n}\n\n\n// ============ 忠实复刻：If / Switch / varResponse 节点语义 ============\n// If 节点 tv2.2：chatInput exists (string, operation=exists)\nconst chatInputExists = o => o.chatInput !== undefined && o.chatInput !== null;\n// Switch 节点 tv3.2：route 严格等于 availability / message（strict typeValidation）\nconst switchRoute = route => (route === 'availability') ? 'out0:availability'\n                          : (route === 'message') ? 'out1:message' : 'drop(无default分支,静默丢)';\n// varResponse Set：response = freeTimeSlots.toJsonString() → 数组被序列化成 JSON 字符串\nconst toJsonStringPolyfill = arr => JSON.stringify(arr);\n\n// ============ 断言驱动 ============\nconst results = [];\nfunction T(name, actual, expected) {\n  const ok = JSON.stringify(actual) === JSON.stringify(expected);\n  results.push({ name, ok, actual, expected: ok ? undefined : expected });\n}\nconst ev = (s, e, showAs) => ({ start: { dateTime: s, timeZone: 'Europe/London' }, end: { dateTime: e, timeZone: 'Europe/London' }, showAs: showAs || 'busy' });\n\n// --- freeTimeSlots（11 断言）---\n// FS1 单日无事件 → 全天营业时段 08:00-17:30\nlet fs1 = freeTimeSlotsFaithful([])[0].json.freeTimeSlots;\nT('FS1 空日历 → 0 槽（无 min/max 日期，循环不跑）', fs1.length, 0);\n\nlet fs2 = freeTimeSlotsFaithful([ev('2026-10-05T10:00:00Z','2026-10-05T11:00:00Z')])[0].json.freeTimeSlots;\nT('FS2 单日 1 个忙会(10-11) → 2 个空档', fs2.length, 2);\nT('FS3 空档1=营业开始~会前', [fs2[0].freeStart, fs2[0].freeEnd], ['2026-10-05T08:00:00.000Z','2026-10-05T10:00:00.000Z']);\nT('FS4 空档2=会后~营业结束', [fs2[1].freeStart, fs2[1].freeEnd], ['2026-10-05T11:00:00.000Z','2026-10-05T17:30:00.000Z']);\nT('FS5 dayOfWeek 用 UTC 星期(2026-10-05=Monday)', fs2[0].dayOfWeek, 'Monday');\n\n// 两会有间隙\nlet fs6 = freeTimeSlotsFaithful([ev('2026-10-06T09:00:00Z','2026-10-06T10:00:00Z'), ev('2026-10-06T14:00:00Z','2026-10-06T15:00:00Z')])[0].json.freeTimeSlots;\nT('FS6 两会夹缝 → 3 空档(前/中/后)', fs6.map(x=>[x.freeStart,x.freeEnd]), [\n  ['2026-10-06T08:00:00.000Z','2026-10-06T09:00:00.000Z'],\n  ['2026-10-06T10:00:00.000Z','2026-10-06T14:00:00.000Z'],\n  ['2026-10-06T15:00:00.000Z','2026-10-06T17:30:00.000Z']]);\n\n// 全天排满 → 无空档\nlet fs7 = freeTimeSlotsFaithful([ev('2026-10-07T08:00:00Z','2026-10-07T17:30:00Z')])[0].json.freeTimeSlots;\nT('FS7 全时段排满 → 0 空档', fs7.length, 0);\n\n// 跨天：min~max 逐日展开，无会议日整天算空\nlet fs8 = freeTimeSlotsFaithful([ev('2026-10-05T10:00:00Z','2026-10-05T11:00:00Z'), ev('2026-10-08T10:00:00Z','2026-10-08T11:00:00Z')])[0].json.freeTimeSlots;\nT('FS8 跨 4 天 → 中间无会日各出 1 个全天档，共 2+1+1+2=6', fs8.length, 6);\n\n// 🚨 坑：周末不排除（systemMessage 说周末不约，但 Code 不知道）\nlet fs9 = freeTimeSlotsFaithful([ev('2026-10-10T10:00:00Z','2026-10-10T11:00:00Z')])[0].json.freeTimeSlots; // 2026-10-10=Saturday\nT('FS9 周六照样出空档（坑：Code 不排除周末，靠 prompt 约束）', fs9.every(x=>x.dayOfWeek==='Saturday'), true);\n\n// 🚨 坑：showAs != busy 的事件被忽略（free/tentative 不占档）\nlet fs10 = freeTimeSlotsFaithful([ev('2026-10-09T09:00:00Z','2026-10-09T10:00:00Z','free')])[0].json.freeTimeSlots;\nT('FS10 showAs=free 事件不占档 → 1 个全天档', fs10.length, 1);\n\n// 🚨 坑：营业前结束的会议(07:00-07:30) → 空档起点=07:30 早于营业开始 08:00，算法不裁剪营业时间（如实复刻）\nlet fs11 = freeTimeSlotsFaithful([ev('2026-10-05T07:00:00Z','2026-10-05T07:30:00Z')])[0].json.freeTimeSlots;\nT('FS11 坑实锤：营业前结束的会议产生 07:30 空档起点（<08:00 营业时间外）', fs11[0].freeStart, '2026-10-05T07:30:00.000Z');\nT('FS12 同理：该日共 1 个空档且 freeEnd=17:30', [fs11.length, fs11[0].freeEnd], [1, '2026-10-05T17:30:00.000Z']);\n\n// --- If chatInput exists（3 断言）---\nT('IF1 chatInput 有值 → true(走 AI Agent)', chatInputExists({chatInput:'hello'}), true);\nT('IF2 无 chatInput(首次握手) → false(走固定欢迎语)', chatInputExists({sessionId:'abc'}), false);\nT('IF3 chatInput=空串也存在(exists 非 isNotEmpty)', chatInputExists({chatInput:''}), true);\n\n// --- Switch route（4 断言）---\nT('SW1 route=availability → out0', switchRoute('availability'), 'out0:availability');\nT('SW2 route=message → out1', switchRoute('message'), 'out1:message');\nT('SW3 route 其他值 → 静默丢（坑：无 default 分支）', switchRoute('booking'), 'drop(无default分支,静默丢)');\nT('SW4 route 大小写敏感(strict)', switchRoute('Availability'), 'drop(无default分支,静默丢)');\n\n// --- varResponse toJsonString（2 断言）---\nT('SET1 varResponse 输出是 JSON 字符串不是数组', typeof toJsonStringPolyfill(fs6), 'string');\nT('SET2 序列化可逆', JSON.parse(toJsonStringPolyfill(fs6)).length, 3);\n\nconst failed = results.filter(x => !x.ok);\nreturn [{ json: { total: results.length, passed: results.length - failed.length, failed: failed.length, failures: failed.map(f => ({name: f.name, actual: f.actual, expected: f.expected})) } }];\n"
+      }
+    }
+  ],
+  "connections": {
+    "Run Tests": {
+      "main": [
+        [
+          {
+            "node": "Unit Tests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "active": false,
+  "tags": []
+}
