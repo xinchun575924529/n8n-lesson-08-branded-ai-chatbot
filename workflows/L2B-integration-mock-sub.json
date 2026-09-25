@@ -1,0 +1,336 @@
+{
+  "id": "L2Mock2786Sub01",
+  "name": "L2B-2786-Sub-ToolsMock",
+  "meta": {
+    "templateId": "2786"
+  },
+  "nodes": [
+    {
+      "id": "sub-trig",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "sub-inject",
+      "name": "Inject Fixture Route",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const fs=require('fs');const fix=JSON.parse(fs.readFileSync('C:/Users/Administrator/.easyclaw/workspace/n8n-lesson-crew/state/2786-mock-scenario.json','utf8'));\nconst it={...items[0].json}; if(fix.route_override){it.route=fix.route_override;} if(fix.tool_query){it.query=fix.tool_query;} return [{json:it}];"
+      }
+    },
+    {
+      "id": "sub-switch",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -380,
+        300
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "availability",
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "availability"
+                  }
+                ]
+              },
+              "renameOutput": true
+            },
+            {
+              "outputKey": "message",
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "message"
+                  }
+                ]
+              },
+              "renameOutput": true
+            },
+            {
+              "outputKey": "appointment",
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "appointment"
+                  }
+                ]
+              },
+              "renameOutput": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "sub-getev",
+      "name": "Mock Get Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -140,
+        180
+      ],
+      "parameters": {
+        "jsCode": "const fs=require('fs');const fix=JSON.parse(fs.readFileSync('C:/Users/Administrator/.easyclaw/workspace/n8n-lesson-crew/state/2786-mock-scenario.json','utf8'));\nreturn [{json:{value:fix.events||[]}}];"
+      }
+    },
+    {
+      "id": "sub-free",
+      "name": "freeTimeSlots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        180
+      ],
+      "parameters": {
+        "jsCode": "\nconst businessHoursStart = \"08:00:00Z\";\nconst businessHoursEnd = \"17:30:00Z\";\nconst inputData = items[0].json.value;\nfunction getDateWithTime(dateString, time) {\n  const datePart = new Date(dateString).toISOString().split(\"T\")[0];\n  return new Date(`${datePart}T${time}`);\n}\nfunction getDayOfWeek(dateString) {\n  const daysOfWeek = [\"Sunday\", \"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\"];\n  return daysOfWeek[new Date(dateString).getUTCDay()];\n}\nfunction addDays(date, days) { const r = new Date(date); r.setDate(r.getDate() + days); return r; }\nfunction formatDate(date) { return date.toISOString().split('T')[0]; }\nconst defaultTimeZone = inputData.length > 0 && inputData[0].start && inputData[0].start.timeZone\n  ? inputData[0].start.timeZone : \"UTC\";\nlet minDate = null, maxDate = null;\ninputData.forEach(event => {\n  if (event.start && event.start.dateTime) {\n    const d = new Date(event.start.dateTime);\n    if (!minDate || d < minDate) minDate = d;\n    if (!maxDate || d > maxDate) maxDate = d;\n  }\n});\nif (minDate && maxDate) {\n  minDate = new Date(minDate.toISOString().split('T')[0]);\n  maxDate = new Date(maxDate.toISOString().split('T')[0]);\n}\nconst eventsByDate = {};\ninputData.forEach(event => {\n  if (event.start && event.start.dateTime) {\n    const k = new Date(event.start.dateTime).toISOString().split(\"T\")[0];\n    if (!eventsByDate[k]) eventsByDate[k] = [];\n    if (event.showAs === \"busy\") {\n      eventsByDate[k].push({ start: new Date(event.start.dateTime), end: new Date(event.end.dateTime), timeZone: event.start.timeZone || defaultTimeZone });\n    }\n  }\n});\nconst freeTimeSlots = [];\nif (minDate && maxDate) {\n  for (let d = new Date(minDate); d <= maxDate; d = addDays(d, 1)) {\n    const dateStr = formatDate(d);\n    const busy = eventsByDate[dateStr] || [];\n    const bs = getDateWithTime(dateStr, businessHoursStart);\n    const be = getDateWithTime(dateStr, businessHoursEnd);\n    if (busy.length === 0) {\n      freeTimeSlots.push({ date: dateStr, dayOfWeek: getDayOfWeek(dateStr), freeStart: bs.toISOString(), freeEnd: be.toISOString(), timeZone: defaultTimeZone });\n      continue;\n    }\n    busy.sort((a, b) => a.start - b.start);\n    if (busy[0].start > bs) freeTimeSlots.push({ date: dateStr, dayOfWeek: getDayOfWeek(dateStr), freeStart: bs.toISOString(), freeEnd: busy[0].start.toISOString(), timeZone: busy[0].timeZone });\n    for (let i = 0; i < busy.length - 1; i++) {\n      if (busy[i].end < busy[i+1].start) freeTimeSlots.push({ date: dateStr, dayOfWeek: getDayOfWeek(dateStr), freeStart: busy[i].end.toISOString(), freeEnd: busy[i+1].start.toISOString(), timeZone: busy[i].timeZone });\n    }\n    if (busy[busy.length-1].end < be) freeTimeSlots.push({ date: dateStr, dayOfWeek: getDayOfWeek(dateStr), freeStart: busy[busy.length-1].end.toISOString(), freeEnd: be.toISOString(), timeZone: busy[busy.length-1].timeZone });\n  }\n}\nreturn [{ json: { freeTimeSlots } }];\n"
+      }
+    },
+    {
+      "id": "sub-varresp",
+      "name": "varResponse",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        300,
+        180
+      ],
+      "parameters": {
+        "options": {},
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "response",
+              "type": "array",
+              "value": "={{ $json.freeTimeSlots.toJsonString() }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sub-mail",
+      "name": "Mock Send Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        340
+      ],
+      "parameters": {
+        "jsCode": "const fs=require('fs');const fix=JSON.parse(fs.readFileSync('C:/Users/Administrator/.easyclaw/workspace/n8n-lesson-crew/state/2786-mock-scenario.json','utf8'));\nconst q=($('Execute Workflow Trigger').item.json.query)||items[0].json.query||{};\nconst dir=fix.state_dir;const p=dir+'/sent-emails.json';\nlet arr=[];try{arr=JSON.parse(fs.readFileSync(p,'utf8'))}catch(e){}\narr.push({name:q.name||'',email:q.email||'',company:q.company||'',subject:q.subject||'',message:q.message||'',at:new Date().toISOString()});\nfs.writeFileSync(p,JSON.stringify(arr,null,2));\nreturn [{json:{ok:true,sent:arr.length}}];"
+      }
+    },
+    {
+      "id": "sub-varmsg",
+      "name": "varMessageResponse",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        300,
+        340
+      ],
+      "parameters": {
+        "options": {},
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a2",
+              "name": "response",
+              "type": "string",
+              "value": "={{ $json }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sub-appt",
+      "name": "Mock Make Appointment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        500
+      ],
+      "parameters": {
+        "jsCode": "const fs=require('fs');const fix=JSON.parse(fs.readFileSync('C:/Users/Administrator/.easyclaw/workspace/n8n-lesson-crew/state/2786-mock-scenario.json','utf8'));\nconst q=($('Execute Workflow Trigger').item.json.query)||items[0].json.query||{};\nconst dir=fix.state_dir;\nconst s=new Date(q.dateStartTime), e=new Date(q.dateEndTime);\nif(isNaN(s)||isNaN(e)) return [{json:{booked:false,error:'bad ISO datetime',got:{s:q.dateStartTime,e:q.dateEndTime}}}];\nconst busy=(fix.events||[]).filter(x=>x.showAs==='busy').map(x=>({s:new Date(x.start.dateTime),e:new Date(x.end.dateTime),subject:x.subject}));\nconst clash=busy.filter(b=>s<b.e&&e>b.s);\nconst p=dir+'/appointments.json';\nlet arr=[];try{arr=JSON.parse(fs.readFileSync(p,'utf8'))}catch(e2){}\nconst rec={name:q.name||'',email:q.email||'',reason:q.reason||'',start:s.toISOString(),end:e.toISOString(),booked:clash.length===0,clashWith:clash.map(c=>c.subject),at:new Date().toISOString()};\narr.push(rec);fs.writeFileSync(p,JSON.stringify(arr,null,2));\nreturn [{json:{booked:rec.booked,conflict:clash.length>0,start:rec.start,end:rec.end,attendee:rec.email,note:clash.length?('CONFLICT with '+clash[0].subject):'confirmed'}}];"
+      }
+    },
+    {
+      "id": "sub-varappt",
+      "name": "varApptResponse",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        300,
+        500
+      ],
+      "parameters": {
+        "options": {},
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a3",
+              "name": "response",
+              "type": "string",
+              "value": "={{ $json }}"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Inject Fixture Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inject Fixture Route": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Mock Get Events",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mock Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mock Make Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock Get Events": {
+      "main": [
+        [
+          {
+            "node": "freeTimeSlots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "freeTimeSlots": {
+      "main": [
+        [
+          {
+            "node": "varResponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock Send Email": {
+      "main": [
+        [
+          {
+            "node": "varMessageResponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock Make Appointment": {
+      "main": [
+        [
+          {
+            "node": "varApptResponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "active": false,
+  "tags": []
+}
