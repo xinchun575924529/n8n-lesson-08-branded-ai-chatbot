@@ -1,0 +1,330 @@
+{
+  "id": "L2C278600001",
+  "name": "L2C-2786-Main-FreeStack",
+  "meta": {
+    "templateId": "2786"
+  },
+  "nodes": [
+    {
+      "id": "c-hook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -700,
+        300
+      ],
+      "webhookId": "2786-chat-hook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatbot-2786",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "c-if",
+      "name": "If",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -480,
+        300
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c1",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.body.chatInput }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c-init",
+      "name": "Respond With Initial Message",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -240,
+        400
+      ],
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "{\n  \"output\": \"Hi, how can I help you today?\"\n}"
+      }
+    },
+    {
+      "id": "c-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        -240,
+        220
+      ],
+      "parameters": {
+        "text": "={{ $json.body.chatInput }}",
+        "promptType": "define",
+        "options": {
+          "systemMessage": "You are an intelligent personal assistant to Wayne, Founder at nocodecreative.io (ai consultancy and software development agency) responsible for coordinating appointments and gathering relevant information from customers. Your tasks are to:\n- Understand when the customer is available by asking for suitable days and times (ensuring they are aware we are in a UK timezone)\n- Check the calendar to identify available slots that match their preferences. Do not double book\n- Get the customer's name, company name and email address to book the appointment\n- Book only after the customer confirms the slot\n- If the customer isn't ready to book, you can send an email for a human to respond to; always include name, company, email and detailed project info\n- Always suggest an appointment before sending a message, appointments are the primary goal, messages are a fall back\nImportant information:\n- All appointments need 48 hours' notice\n- Business hours are 8am - 6pm Monday to Friday only Europe/London timezone\n- Do not book appointments on weekends\n- All appointments are for a max of 30 minutes\n- You must never offer an appointment without checking the calendar first; do not make availability up\n//Do not discuss anything other than appointment booking; be friendly and always offer to book\n//When the appointment is confirmed, tell the customer they will meet Wayne for a 30 minute free consultation\n",
+          "maxIterations": 8
+        }
+      }
+    },
+    {
+      "id": "c-model",
+      "name": "DeepSeek Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        60
+      ],
+      "parameters": {
+        "model": "deepseek-chat",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "__OPENAI_CRED_ID__",
+          "name": "__YOUR_DEEPSEEK_CRED__"
+        }
+      }
+    },
+    {
+      "id": "c-mem",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [
+        -420,
+        60
+      ],
+      "parameters": {
+        "sessionKey": "={{ $json.body.sessionId || 'anon' }}",
+        "sessionIdType": "customKey",
+        "contextWindowLength": 20
+      }
+    },
+    {
+      "id": "c-t1",
+      "name": "Get Availability",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        20
+      ],
+      "parameters": {
+        "name": "Get_availability",
+        "description": "Call this tool to check the calendar for availability before booking. Returns free time slots. Do not double book.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "L2C2786Sub01"
+        },
+        "fields": {
+          "values": [
+            {
+              "name": "route",
+              "stringValue": "availability"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c-t2",
+      "name": "Send Message",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        140
+      ],
+      "parameters": {
+        "name": "Send_email",
+        "description": "Call this tool when the customer wants a human, or is not ready to book, or asks things outside your remit. Always include full name, company, email and a detailed message.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "L2C2786Sub01"
+        },
+        "fields": {
+          "values": [
+            {
+              "name": "route",
+              "stringValue": "message"
+            }
+          ]
+        },
+        "specifyInputSchema": true,
+        "jsonSchemaExample": "{\n  \"email\": \"the customer email\",\n  \"subject\": \"subject\",\n  \"message\": \"detailed enquiry\",\n  \"name\": \"full name\",\n  \"company\": \"company name\"\n}"
+      }
+    },
+    {
+      "id": "c-t3",
+      "name": "Make Appointment",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        260
+      ],
+      "parameters": {
+        "name": "Make_appointment",
+        "description": "Call this tool to book the appointment after the customer confirms a slot. dateStartTime/dateEndTime ISO strings (30 min), plus reason, email, name.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "L2C2786Sub01"
+        },
+        "fields": {
+          "values": [
+            {
+              "name": "route",
+              "stringValue": "appointment"
+            }
+          ]
+        },
+        "specifyInputSchema": true,
+        "jsonSchemaExample": "{\n  \"dateStartTime\": \"ISO start\",\n  \"dateEndTime\": \"ISO end, 30 min later\",\n  \"reason\": \"topic\",\n  \"email\": \"customer email\",\n  \"name\": \"customer full name\"\n}"
+      }
+    },
+    {
+      "id": "c-resp",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        40,
+        220
+      ],
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({output: $json.output || $json.response || JSON.stringify($json)}) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond With Initial Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Availability": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Message": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Make Appointment": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "active": false,
+  "tags": []
+}
