@@ -1,0 +1,344 @@
+{
+  "id": "L2Mock278600001",
+  "name": "L2B-2786-Main-ChatbotMock",
+  "meta": {
+    "templateId": "2786"
+  },
+  "nodes": [
+    {
+      "id": "m-trig",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        -900,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "m-load",
+      "name": "Load Fixture",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -700,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const fs=require('fs');const fix=JSON.parse(fs.readFileSync('C:/Users/Administrator/.easyclaw/workspace/n8n-lesson-crew/state/2786-mock-scenario.json','utf8'));\nconst out={sessionId:fix.sessionId||'sess-2786',state_dir:fix.state_dir};\nif(fix.chatInput!==undefined&&fix.chatInput!==null) out.chatInput=fix.chatInput;\nreturn [{json:out}];"
+      }
+    },
+    {
+      "id": "m-if",
+      "name": "If",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -480,
+        300
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c1",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.chatInput }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "m-init",
+      "name": "Respond With Initial Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        400
+      ],
+      "parameters": {
+        "jsCode": "const fs=require('fs');const fix=JSON.parse(fs.readFileSync('C:/Users/Administrator/.easyclaw/workspace/n8n-lesson-crew/state/2786-mock-scenario.json','utf8'));\nconst res={output:'Hi, how can I help you today?'};\nfs.writeFileSync(fix.state_dir+'/final.json',JSON.stringify(res,null,2));\nreturn [{json:res}];"
+      }
+    },
+    {
+      "id": "m-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        -240,
+        220
+      ],
+      "parameters": {
+        "text": "={{ $json.chatInput }}",
+        "promptType": "define",
+        "options": {
+          "systemMessage": "You are an intelligent personal assistant to Wayne, Founder at nocodecreative.io (ai consultancy and software development agency) responsible for coordinating appointments and gathering relevant information from customers. Your tasks are to:\n- Understand when the customer is available by asking for suitable days and times (ensuring they are aware we are in a UK timezone)\n- Check the calendar to identify available slots that match their preferences. Pay attention to each event's start and end time and do not double book\n- Ask the customer what they would like to discuss during the appointment to ensure proper preparation.\n- Get the customer's name, company name and email address to book the appointment\n- Make the conversation friendly and natural.\n- After you have checked the calendar, book the appointment accordingly, without double booking.\n- If the customer isn't ready to book, you can send an email for a human to respond to, ensure you gather a detailed enquiry including name, company, email and project details.\n- Always suggest an appointment before sending a message, appointments are the primary goal, messages are a fall back\nIf the time the customer suggests is not available, suggest the nearest alternative appointment based on existing events, do not book an appointment outside of freeTimeSlots\nImportant information:\n- All appointments need 48 hours' notice\n- Business hours are 8am - 6pm Monday to Friday only Europe/London timezone\n- Do not book appointments on a Saturday or Sunday\n- Do not book appointments outside of freeTimeSlots\n- All appointments are for a max of 30 minutes\n- You must never offer an appointment without checking the calendar first\n- When the appointment is confirmed, let the customer know by name that they will meet Wayne for a 30 minute consultation\n- Initial 30 minute consultations are free of charge\n//IMPORTANT! Do not offer any times without checking the calendar, do not make availability up\n//Do not discuss anything other than appointment booking; if the query does not relate to an appointment, advise them you cannot help at this time, be friendly and always offer to book an appointment to discuss their query\n//Do not refer to yourself as me or I, communicate like an organisation using 'us'\n",
+          "maxIterations": 8
+        }
+      }
+    },
+    {
+      "id": "m-model",
+      "name": "DeepSeek Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        60
+      ],
+      "parameters": {
+        "model": "deepseek-chat",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "__OPENAI_CRED_ID__",
+          "name": "__YOUR_DEEPSEEK_CRED__"
+        }
+      }
+    },
+    {
+      "id": "m-mem",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [
+        -420,
+        60
+      ],
+      "parameters": {
+        "sessionKey": "={{ $('Load Fixture').item.json.sessionId }}",
+        "sessionIdType": "customKey",
+        "contextWindowLength": 20
+      }
+    },
+    {
+      "id": "m-tool-avail",
+      "name": "Get Availability",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        20
+      ],
+      "parameters": {
+        "name": "Get_availability",
+        "description": "Call this tool to check the calendar for availability before booking an appointment. Returns all free time slots for the coming days. Do not double book.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "L2Mock2786Sub01"
+        },
+        "fields": {
+          "values": [
+            {
+              "name": "route",
+              "stringValue": "availability"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "m-tool-msg",
+      "name": "Send Message",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        140
+      ],
+      "parameters": {
+        "name": "Send_email",
+        "description": "Call this tool when the customer wants to speak to a human, or is not ready to make an appointment, or has questions outside of your remit. Sends an email to the founder. Always include the customer's full name, company, email address and a detailed message.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "L2Mock2786Sub01"
+        },
+        "fields": {
+          "values": [
+            {
+              "name": "route",
+              "stringValue": "message"
+            }
+          ]
+        },
+        "specifyInputSchema": true,
+        "jsonSchemaExample": "{\n  \"email\": \"the customer email\",\n  \"subject\": \"subject\",\n  \"message\": \"detailed enquiry\",\n  \"name\": \"full name\",\n  \"company\": \"company name\"\n}"
+      }
+    },
+    {
+      "id": "m-tool-appt",
+      "name": "Make Appointment",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        260
+      ],
+      "parameters": {
+        "name": "Make_appointment",
+        "description": "Call this tool to book the appointment after checking availability. Provide dateStartTime and dateEndTime (30 min later) as ISO strings with timezone, plus reason, email and name.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "L2Mock2786Sub01"
+        },
+        "fields": {
+          "values": [
+            {
+              "name": "route",
+              "stringValue": "appointment"
+            }
+          ]
+        },
+        "specifyInputSchema": true,
+        "jsonSchemaExample": "{\n  \"dateStartTime\": \"ISO start with timezone\",\n  \"dateEndTime\": \"ISO end, 30 min later\",\n  \"reason\": \"what to discuss\",\n  \"email\": \"customer email\",\n  \"name\": \"customer full name\"\n}"
+      }
+    },
+    {
+      "id": "m-final",
+      "name": "Write Final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        220
+      ],
+      "parameters": {
+        "jsCode": "const fs=require('fs');const fix=JSON.parse(fs.readFileSync('C:/Users/Administrator/.easyclaw/workspace/n8n-lesson-crew/state/2786-mock-scenario.json','utf8'));\nconst out=$json.output||$json.response||JSON.stringify($json);\nfs.writeFileSync(fix.state_dir+'/final.json',JSON.stringify({output:String(out)},null,2));\nreturn [{json:{output:String(out)}}];"
+      }
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Load Fixture",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Fixture": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond With Initial Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Write Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Availability": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Message": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Make Appointment": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "active": false,
+  "tags": []
+}
